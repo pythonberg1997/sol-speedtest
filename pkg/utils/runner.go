@@ -116,8 +116,13 @@ func (r *TestRunner) RunTests() error {
 					continue
 				}
 				cli = client.NewSlot0Client(endpoint.URL, apiKey)
-			// case "blockRazor":
-			// 	cli = client.NewBlockrazorClient(endpoint.URL, cfg.ApiKey)
+			case "blockRazor":
+				apiKey := os.Getenv("BLOCK_RAZOR")
+				if apiKey == "" {
+					providerLogger.Error("blockRazor API key not set in environment variables")
+					continue
+				}
+				cli = client.NewBlockrazorClient(endpoint.URL, apiKey)
 			case "bloXroute":
 				apiKey := os.Getenv("BLOX_ROUTE")
 				if apiKey == "" {
