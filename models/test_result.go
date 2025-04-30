@@ -18,11 +18,12 @@ type TransactionTest struct {
 
 // TestReport represents the final report of all tests
 type TestReport struct {
-	StartTime       time.Time        `json:"startTime"`
-	EndTime         time.Time        `json:"endTime"`
-	TotalDuration   int64            `json:"totalDuration"` // Duration in milliseconds
-	TotalRounds     int              `json:"totalRounds"`
-	ProviderResults []ProviderResult `json:"providerResults"`
+	StartTime          time.Time        `json:"startTime"`
+	EndTime            time.Time        `json:"endTime"`
+	TotalDuration      int64            `json:"totalDuration"` // Duration in milliseconds
+	TotalRounds        int              `json:"totalRounds"`
+	ProviderResults    []ProviderResult `json:"providerResults"`
+	SuccessfulTxHashes []string         `json:"successfulTxHashes"` // All successful transaction hashes
 }
 
 // ProviderResult represents aggregated results for a provider

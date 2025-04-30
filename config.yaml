@@ -1,6 +1,6 @@
 rpcUrl: "https://solana-rpc.publicnode.com"
 nonceAccount: "DvN7DSowbwqN1CdDYmMo5Hx6RRJr5ha9qLruFQfLyZ3t"
-testCount: 2
+testCount: 10
 timeout: 30
 outputPath: "results"
 logFilePath: "logs"

@@ -27,7 +27,10 @@ type TestRunner struct {
 	collector      *metrics.Collector
 	providerConfig map[string]config.ProviderConfig
 	testInterval   time.Duration
-	logger         *logger.Logger
+
+	preNonce *solana.Hash
+
+	logger *logger.Logger
 }
 
 type EndpointInfo struct {
@@ -216,19 +219,28 @@ func (r *TestRunner) RunTests() error {
 }
 
 func (r *TestRunner) getNonce() solana.Hash {
-	nonceAccount, err := r.rpcClient.GetAccountInfo(context.Background(), r.nonceAccount)
-	if err != nil {
-		r.logger.Error("Error getting nonce account info: %v", err)
-		return solana.Hash{}
-	}
-	if nonceAccount == nil {
-		r.logger.Error("Nonce account not found")
-		return solana.Hash{}
-	}
-	nonceData := nonceAccount.Value.Data.GetBinary()[40:72]
+	var nonce solana.Hash
+	for {
+		nonceAccount, err := r.rpcClient.GetAccountInfo(context.Background(), r.nonceAccount)
+		if err != nil {
+			r.logger.Error("Error getting nonce account info: %v", err)
+			return solana.Hash{}
+		}
+		if nonceAccount == nil {
+			r.logger.Error("Nonce account not found")
+			return solana.Hash{}
+		}
+		nonceData := nonceAccount.Value.Data.GetBinary()[40:72]
 
-	nonce := solana.Hash(nonceData)
-	r.logger.Debug("Retrieved nonce: %s", nonce.String())
+		nonce = solana.Hash(nonceData)
+		if r.preNonce == nil || *r.preNonce != nonce {
+			r.preNonce = &nonce
+			break
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	}
+
 	return nonce
 }
 

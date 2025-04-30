@@ -69,9 +69,10 @@ func (c *Collector) ProcessResults() (*models.TestReport, error) {
 	totalDuration := endTime.Sub(c.startTime).Milliseconds()
 
 	report := &models.TestReport{
-		StartTime:     c.startTime,
-		EndTime:       endTime,
-		TotalDuration: totalDuration,
+		StartTime:          c.startTime,
+		EndTime:            endTime,
+		TotalDuration:      totalDuration,
+		SuccessfulTxHashes: []string{},
 	}
 
 	providerWins := make(map[string]int)
@@ -93,6 +94,10 @@ func (c *Collector) ProcessResults() (*models.TestReport, error) {
 		}
 
 		providerMap[test.ProviderName][endpointKey] = append(providerMap[test.ProviderName][endpointKey], test)
+
+		if test.Success && test.TxHash != "" {
+			report.SuccessfulTxHashes = append(report.SuccessfulTxHashes, test.TxHash)
+		}
 	}
 
 	for providerName, endpointTests := range providerMap {
@@ -202,25 +207,21 @@ func (c *Collector) SaveResults() error {
 		return err
 	}
 
-	// Ensure the output directory exists
 	outputDir := c.outputPath
 	err = os.MkdirAll(outputDir, 0o755)
 	if err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	// Create a filename with timestamp
 	timestamp := time.Now().Format("2006-01-02-150405")
 	filename := fmt.Sprintf("speedtest-results-%s.json", timestamp)
 	outputPath := filepath.Join(outputDir, filename)
 
-	// Marshal the data
 	data, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	// Write to file
 	err = os.WriteFile(outputPath, data, 0o644)
 	if err != nil {
 		return err
