@@ -56,7 +56,6 @@ func NewTestRunner(cfg *config.Config, privKey string, logLevel logger.LogLevel)
 	signer := solana.MustPrivateKeyFromBase58(privKey)
 	nonceAccount := solana.MustPublicKeyFromBase58(cfg.NonceAccount)
 
-	log := logger.GetDefaultLogger()
 	logDir := "logs"
 	if cfg.LogFilePath != "" {
 		logDir = cfg.LogFilePath
@@ -78,6 +77,8 @@ func NewTestRunner(cfg *config.Config, privKey string, logLevel logger.LogLevel)
 	if err != nil {
 		fmt.Printf("Warning: Failed to initialize logger: %v. Logs will be sent to stderr.\n", err)
 	}
+
+	log := logger.GetDefaultLogger()
 
 	return &TestRunner{
 		config:         cfg,
