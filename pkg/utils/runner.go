@@ -130,6 +130,8 @@ func (r *TestRunner) RunTests() error {
 					continue
 				}
 				cli = client.NewBloxrouteClient(endpoint.URL, apiKey)
+			case "jito":
+				cli = client.NewJitoClient(endpoint.URL)
 			case "nextBlock":
 				apiKey := os.Getenv("NEXT_BLOCK")
 				if apiKey == "" {
@@ -274,7 +276,7 @@ func (r *TestRunner) endpointWorker(
 		}
 
 		endpointLogger.Debug("Sending transaction with nonce %s", req.Nonce.String())
-		txBase64, err := r.buildTransaction(endpoint.TipAmount, endpoint.TipAccount, req.Nonce)
+		txBase64, txHash, err := r.buildTransaction(endpoint.TipAmount, endpoint.TipAccount, req.Nonce)
 		if err != nil {
 			endpointLogger.Debug("Build tx failed: %s", test.Error)
 			test.Error = "failed to build transaction"
@@ -286,7 +288,7 @@ func (r *TestRunner) endpointWorker(
 			continue
 		}
 
-		txHash, err := cli.SendTransaction(ctxWithCancel, txBase64)
+		_, err = cli.SendTransaction(ctxWithCancel, txBase64)
 		if errors.Is(ctxWithCancel.Err(), context.Canceled) {
 			endpointLogger.Debug("Operation canceled: %s", test.Error)
 			test.Error = "canceled due to successful transaction by another endpoint"
@@ -383,6 +385,44 @@ func (r *TestRunner) collectResults(resultsChan <-chan *models.TransactionTest, 
 	r.logger.Info("Result collection complete: %d total results, %d successful", count, successCount)
 }
 
+func (r *TestRunner) buildTransaction(
+	tipAmount uint64, tipAccount string, nonce solana.Hash,
+) (string, string, error) {
+	advanceNonceIx := system.NewAdvanceNonceAccountInstruction(
+		r.nonceAccount,
+		solana.SysVarRecentBlockHashesPubkey,
+		r.signer.PublicKey(),
+	).Build()
+
+	tipIx := system.NewTransferInstruction(
+		tipAmount,
+		r.signer.PublicKey(),
+		solana.MustPublicKeyFromBase58(tipAccount),
+	).Build()
+
+	tx, err := solana.NewTransaction(
+		[]solana.Instruction{advanceNonceIx, tipIx},
+		nonce,
+		solana.TransactionPayer(r.signer.PublicKey()),
+	)
+	if err != nil {
+		return "", "", err
+	}
+
+	_, err = tx.Sign(func(key solana.PublicKey) *solana.PrivateKey {
+		return &r.signer
+	})
+	if err != nil {
+		return "", "", err
+	}
+
+	txBase64, err := tx.ToBase64()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to convert transaction to base58: %w", err)
+	}
+	return txBase64, tx.Signatures[0].String(), nil
+}
+
 func checkTransactionWithTimeout(
 	ctx context.Context,
 	rpcClient *rpc.Client,
@@ -440,42 +480,4 @@ func checkTransactionWithTimeout(
 			}
 		}
 	}
-}
-
-func (r *TestRunner) buildTransaction(
-	tipAmount uint64, tipAccount string, nonce solana.Hash,
-) (string, error) {
-	advanceNonceIx := system.NewAdvanceNonceAccountInstruction(
-		r.nonceAccount,
-		solana.SysVarRecentBlockHashesPubkey,
-		r.signer.PublicKey(),
-	).Build()
-
-	tipIx := system.NewTransferInstruction(
-		tipAmount,
-		r.signer.PublicKey(),
-		solana.MustPublicKeyFromBase58(tipAccount),
-	).Build()
-
-	tx, err := solana.NewTransaction(
-		[]solana.Instruction{advanceNonceIx, tipIx},
-		nonce,
-		solana.TransactionPayer(r.signer.PublicKey()),
-	)
-	if err != nil {
-		return "", err
-	}
-
-	_, err = tx.Sign(func(key solana.PublicKey) *solana.PrivateKey {
-		return &r.signer
-	})
-	if err != nil {
-		return "", err
-	}
-
-	txBase64, err := tx.ToBase64()
-	if err != nil {
-		return "", fmt.Errorf("failed to convert transaction to base58: %w", err)
-	}
-	return txBase64, nil
 }
