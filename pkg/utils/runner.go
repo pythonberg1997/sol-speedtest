@@ -278,13 +278,11 @@ func (r *TestRunner) endpointWorker(
 			}
 		}()
 
-		startTime := time.Now()
 		test := models.TransactionTest{
 			ProviderName: endpoint.ProviderName,
 			URL:          endpoint.URL,
 			TipAccount:   endpoint.TipAccount,
 			Nonce:        req.Nonce.String(),
-			StartTime:    startTime,
 			Success:      false,
 		}
 
@@ -293,20 +291,17 @@ func (r *TestRunner) endpointWorker(
 		if err != nil {
 			endpointLogger.Debug("Build tx failed: %s", test.Error)
 			test.Error = "failed to build transaction"
-			test.EndTime = time.Now()
-			test.Duration = test.EndTime.Sub(startTime).Milliseconds()
 			req.ResultChan <- &test
 			cancel()
 			cancelOp()
 			continue
 		}
 
+		startTime := time.Now()
 		_, err = cli.SendTransaction(ctxWithCancel, txBase64)
 		if errors.Is(ctxWithCancel.Err(), context.Canceled) {
 			endpointLogger.Debug("Operation canceled: %s", test.Error)
 			test.Error = "canceled due to successful transaction by another endpoint"
-			test.EndTime = time.Now()
-			test.Duration = test.EndTime.Sub(startTime).Milliseconds()
 			req.ResultChan <- &test
 			cancel()
 			cancelOp()
@@ -315,8 +310,6 @@ func (r *TestRunner) endpointWorker(
 		if err != nil {
 			endpointLogger.Error("Transaction failed: %v", err)
 			test.Error = err.Error()
-			test.EndTime = time.Now()
-			test.Duration = test.EndTime.Sub(startTime).Milliseconds()
 			req.ResultChan <- &test
 			cancel()
 			cancelOp()
@@ -329,8 +322,6 @@ func (r *TestRunner) endpointWorker(
 		if errors.Is(ctxWithCancel.Err(), context.Canceled) {
 			endpointLogger.Debug("Confirmation check canceled: %s", test.Error)
 			test.Error = "canceled due to successful transaction by another endpoint"
-			test.EndTime = time.Now()
-			test.Duration = test.EndTime.Sub(startTime).Milliseconds()
 			req.ResultChan <- &test
 			cancel()
 			cancelOp()
@@ -481,8 +472,8 @@ func checkTransactionWithTimeout(
 
 			txStatus := status.Value[0]
 			if txStatus.ConfirmationStatus != "" {
-				if txStatus.ConfirmationStatus == rpc.ConfirmationStatusConfirmed {
-					log.Debug("Transaction confirmed: %s", txHash)
+				if txStatus.ConfirmationStatus == rpc.ConfirmationStatusProcessed {
+					log.Debug("Transaction processed: %s", txHash)
 					return true, nil
 				}
 			}
