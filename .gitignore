@@ -1,0 +1,8 @@
+.idea/
+
+.env
+
+results/
+logs/
+
+nonce_account_info.txt

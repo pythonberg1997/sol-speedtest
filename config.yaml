@@ -1,0 +1,71 @@
+rpcUrl: "https://solana-rpc.publicnode.com"
+nonceAccount: "DvN7DSowbwqN1CdDYmMo5Hx6RRJr5ha9qLruFQfLyZ3t"
+testCount: 2
+timeout: 30
+outputPath: "results"
+logFilePath: "logs"
+logLevel: "info"
+logRotation:
+  maxSizeMB: 10
+  maxAgeHours: 24
+  maxBackups: 10
+  rotateOnTime: true
+
+providers:
+  - name: "blockRazor"
+    tipAmount: 1000000
+    endpoints:
+      - name: "gm"
+        url: "frankfurt.solana-grpc.blockrazor.xyz:80"
+        tipAccount: "Gywj98ophM7GmkDdaWs4isqZnDdFCW7B46TXmKfvyqSm"
+      - name: "hk"
+        url: "hongkong.solana-grpc.blockrazor.xyz:80"
+        tipAccount: "Gywj98ophM7GmkDdaWs4isqZnDdFCW7B46TXmKfvyqSm"
+      - name: "ny"
+        url: "newyork.solana-grpc.blockrazor.xyz:80"
+        tipAccount: "Gywj98ophM7GmkDdaWs4isqZnDdFCW7B46TXmKfvyqSm"
+
+  - name: "0xslot"
+    tipAmount: 1000000
+    endpoints:
+      - name: "ny"
+        url: "http://ny1.0slot.trade"
+        tipAccount: "Eb2KpSC8uMt9GmzyAEm5Eb1AAAgTjRaXWFjKyFXHZxF3"
+      - name: "gm"
+        url: " http://de1.0slot.trade"
+        tipAccount: "Eb2KpSC8uMt9GmzyAEm5Eb1AAAgTjRaXWFjKyFXHZxF3"
+      - name: "ams"
+        url: "http://ams1.0slot.trade"
+        tipAccount: "Eb2KpSC8uMt9GmzyAEm5Eb1AAAgTjRaXWFjKyFXHZxF3"
+
+  - name: "bloXroute"
+    tipAmount: 1000000
+    endpoints:
+      - name: "uk"
+        url: "https://uk.solana.dex.blxrbdn.com"
+        tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
+      - name: "ny"
+        url: " https://ny.solana.dex.blxrbdn.com"
+        tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
+      - name: "la"
+        url: "https://la.solana.dex.blxrbdn.com"
+        tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
+      - name: "gm"
+        url: "https://germany.solana.dex.blxrbdn.com"
+        tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
+      - name: "ams"
+        url: " https://amsterdam.solana.dex.blxrbdn.com"
+        tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
+      - name: "tk"
+        url: "https://tokyo.solana.dex.blxrbdn.com"
+        tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
+
+  - name: "nextBlock"
+    tipAmount: 1000000
+    endpoints:
+      - name: "gm"
+        url: "https://fra.nextblock.io"
+        tipAccount: "NextbLoCkVtMGcV47JzewQdvBpLqT9TxQFozQkN98pE"
+      - name: "ny"
+        url: " https://ny.nextblock.io"
+        tipAccount: "NextbLoCkVtMGcV47JzewQdvBpLqT9TxQFozQkN98pE"
