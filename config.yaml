@@ -1,4 +1,5 @@
-rpcUrl: "https://solana-rpc.publicnode.com"
+rpcUrl: "https://mainnet.helius-rpc.com/?api-key="
+wssUrl: "wss://mainnet.helius-rpc.com/?api-key="
 nonceAccount: "DvN7DSowbwqN1CdDYmMo5Hx6RRJr5ha9qLruFQfLyZ3t"
 testCount: 10
 timeout: 30

@@ -11,6 +11,7 @@ import (
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/programs/system"
 	"github.com/gagliardetto/solana-go/rpc"
+	"github.com/gagliardetto/solana-go/rpc/ws"
 
 	"sol-speedtest/models"
 	"sol-speedtest/pkg/client"
@@ -18,6 +19,8 @@ import (
 	"sol-speedtest/pkg/logger"
 	"sol-speedtest/pkg/metrics"
 )
+
+var blockInterval = 400 * time.Millisecond
 
 type TestRunner struct {
 	config         *config.Config
@@ -29,6 +32,9 @@ type TestRunner struct {
 	testInterval   time.Duration
 
 	preNonce *solana.Hash
+
+	currentSlot uint64
+	slotMu      sync.RWMutex
 
 	logger *logger.Logger
 }
@@ -55,7 +61,7 @@ func NewTestRunner(cfg *config.Config, privKey string, logLevel logger.LogLevel)
 		providerConfig[p.Name] = p
 	}
 
-	rpcClient := rpc.New(cfg.RPCURL)
+	rpcClient := rpc.New(cfg.RpcUrl)
 	signer := solana.MustPrivateKeyFromBase58(privKey)
 	nonceAccount := solana.MustPublicKeyFromBase58(cfg.NonceAccount)
 
@@ -83,16 +89,33 @@ func NewTestRunner(cfg *config.Config, privKey string, logLevel logger.LogLevel)
 
 	log := logger.GetDefaultLogger()
 
-	return &TestRunner{
+	runner := &TestRunner{
 		config:         cfg,
 		rpcClient:      rpcClient,
 		signer:         signer,
 		nonceAccount:   nonceAccount,
 		collector:      metrics.NewCollector(cfg.OutputPath),
 		providerConfig: providerConfig,
-		testInterval:   400 * time.Millisecond,
+		testInterval:   blockInterval,
 		logger:         log,
 	}
+
+	if cfg.WssUrl != "" {
+		go runner.startSlotSubscription(cfg.WssUrl)
+
+		for {
+			slot := runner.GetCurrentSlot()
+			if slot > 0 {
+				runner.logger.Info("Current slot height: %d", slot)
+				break
+			}
+			time.Sleep(blockInterval)
+		}
+	} else {
+		log.Warn("No WebSocket URL provided, slot height tracking will not be available")
+	}
+
+	return runner
 }
 
 func (r *TestRunner) SetTestInterval(interval time.Duration) {
@@ -268,14 +291,13 @@ func (r *TestRunner) endpointWorker(
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(r.config.Timeout)*time.Second)
-		ctxWithCancel, cancelOp := context.WithCancel(ctx)
 
 		go func() {
 			select {
 			case <-req.SuccessChan:
 				endpointLogger.Debug("Transaction succeeded on another endpoint, canceling operation")
-				cancelOp()
-			case <-ctxWithCancel.Done():
+				cancel()
+			case <-ctx.Done():
 				return
 			}
 		}()
@@ -295,18 +317,21 @@ func (r *TestRunner) endpointWorker(
 			test.Error = "failed to build transaction"
 			req.ResultChan <- &test
 			cancel()
-			cancelOp()
 			continue
 		}
+		test.TxHash = txHash
 
 		startTime := time.Now()
-		_, err = cli.SendTransaction(ctxWithCancel, txBase64)
-		if errors.Is(ctxWithCancel.Err(), context.Canceled) {
-			endpointLogger.Debug("Operation canceled: %s", test.Error)
-			test.Error = "canceled due to successful transaction by another endpoint"
+		test.StartTime = startTime
+		startSlot := r.GetCurrentSlot()
+		test.StartSlot = startSlot
+
+		_, err = cli.SendTransaction(ctx, txBase64)
+		if errors.Is(ctx.Err(), context.Canceled) {
+			endpointLogger.Debug("Send tx canceled: %s", test.Error)
+			test.Error = "context canceled"
 			req.ResultChan <- &test
 			cancel()
-			cancelOp()
 			continue
 		}
 		if err != nil {
@@ -314,19 +339,16 @@ func (r *TestRunner) endpointWorker(
 			test.Error = err.Error()
 			req.ResultChan <- &test
 			cancel()
-			cancelOp()
 			continue
 		}
-
-		test.TxHash = txHash
 		endpointLogger.Debug("Transaction sent, hash: %s", txHash)
-		confirmed, err := checkTransactionWithTimeout(ctxWithCancel, r.rpcClient, txHash, endpointLogger)
-		if errors.Is(ctxWithCancel.Err(), context.Canceled) {
+
+		confirmed, err := checkTransactionWithTimeout(ctx, r.rpcClient, txHash, endpointLogger)
+		if errors.Is(ctx.Err(), context.Canceled) {
 			endpointLogger.Debug("Confirmation check canceled: %s", test.Error)
-			test.Error = "canceled due to successful transaction by another endpoint"
+			test.Error = "context canceled"
 			req.ResultChan <- &test
 			cancel()
-			cancelOp()
 			continue
 		}
 
@@ -340,18 +362,10 @@ func (r *TestRunner) endpointWorker(
 			test.Success = confirmed
 			if confirmed {
 				endpointLogger.Info("Transaction confirmed in %d ms", test.Duration)
-				req.SuccessMu.Lock()
-				if !(*req.SuccessSignal) {
-					*req.SuccessSignal = true
-					for i := 0; i < cap(req.SuccessChan); i++ {
-						select {
-						case req.SuccessChan <- true:
-						default:
-						}
-					}
-					endpointLogger.Info("Signaled success for nonce %s", req.Nonce.String())
-				}
-				req.SuccessMu.Unlock()
+				confirmSlot := r.GetCurrentSlot()
+				test.SlotDelta = confirmSlot - startSlot
+
+				r.signalSuccess(req, endpointLogger, req.Nonce.String())
 			} else {
 				endpointLogger.Warn("Transaction not confirmed after %d ms", test.Duration)
 			}
@@ -359,10 +373,25 @@ func (r *TestRunner) endpointWorker(
 
 		req.ResultChan <- &test
 		cancel()
-		cancelOp()
 	}
 
 	endpointLogger.Info("Endpoint worker for %s completed", endpoint.URL)
+}
+
+// signalSuccess signals success to other workers to avoid redundant work
+func (r *TestRunner) signalSuccess(req NonceRequest, logger *logger.Logger, nonceStr string) {
+	req.SuccessMu.Lock()
+	defer req.SuccessMu.Unlock()
+
+	if !(*req.SuccessSignal) {
+		*req.SuccessSignal = true
+		select {
+		case req.SuccessChan <- true:
+			logger.Info("Signaled success for nonce %s", nonceStr)
+		default:
+			logger.Debug("Could not signal success for nonce %s, channel full or closed", nonceStr)
+		}
+	}
 }
 
 func (r *TestRunner) collectResults(resultsChan <-chan *models.TransactionTest, wg *sync.WaitGroup) {
@@ -468,6 +497,10 @@ func checkTransactionWithTimeout(
 				signature,
 			)
 			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					log.Debug("Transaction status check canceled: %v", err)
+					return false, err
+				}
 				log.Error("Error querying transaction status: %v", err)
 				continue
 			}
@@ -482,6 +515,15 @@ func checkTransactionWithTimeout(
 				if txStatus.ConfirmationStatus == rpc.ConfirmationStatusProcessed {
 					log.Debug("Transaction processed: %s", txHash)
 					return true, nil
+				} else if txStatus.ConfirmationStatus == rpc.ConfirmationStatusConfirmed {
+					log.Debug("Transaction confirmed: %s", txHash)
+					return true, nil
+				} else if txStatus.ConfirmationStatus == rpc.ConfirmationStatusFinalized {
+					log.Debug("Transaction finalized: %s", txHash)
+					return true, nil
+				} else {
+					log.Debug("Transaction status: %s", txStatus.ConfirmationStatus)
+					return false, fmt.Errorf("unknown transaction status: %s", txStatus.ConfirmationStatus)
 				}
 			}
 
@@ -491,4 +533,57 @@ func checkTransactionWithTimeout(
 			}
 		}
 	}
+}
+
+// startSlotSubscription starts a websocket connection to track slot updates
+func (r *TestRunner) startSlotSubscription(wssUrl string) {
+	r.logger.Info("Starting slot subscription via WebSocket at %s", wssUrl)
+
+	ctx := context.Background()
+	for {
+		if err := r.connectAndSubscribeSlot(ctx, wssUrl); err != nil {
+			r.logger.Error("Slot subscription session ended with error: %v", err)
+			time.Sleep(blockInterval)
+			continue
+		}
+	}
+}
+
+// connectAndSubscribeSlot connects to WebSocket and subscribes to slot updates
+func (r *TestRunner) connectAndSubscribeSlot(ctx context.Context, wssUrl string) error {
+	wsClient, err := ws.Connect(ctx, wssUrl)
+	if err != nil {
+		r.logger.Error("Failed to connect to WebSocket: %v", err)
+		return err
+	}
+	defer wsClient.Close()
+
+	sub, err := wsClient.SlotSubscribe()
+	if err != nil {
+		r.logger.Error("Failed to subscribe to slot updates: %v", err)
+		return err
+	}
+	defer sub.Unsubscribe()
+	r.logger.Info("Successfully subscribed to slot updates")
+
+	for {
+		got, err := sub.Recv(ctx)
+		if err != nil {
+			r.logger.Error("Error receiving slot update: %v", err)
+			return err
+		}
+
+		r.slotMu.Lock()
+		r.currentSlot = got.Slot
+		r.slotMu.Unlock()
+
+		r.logger.Debug("Updated current slot to %d", got.Slot)
+	}
+}
+
+// GetCurrentSlot returns the current slot height
+func (r *TestRunner) GetCurrentSlot() uint64 {
+	r.slotMu.RLock()
+	defer r.slotMu.RUnlock()
+	return r.currentSlot
 }

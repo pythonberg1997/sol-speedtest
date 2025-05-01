@@ -12,6 +12,8 @@ type TransactionTest struct {
 	StartTime    time.Time `json:"startTime"`
 	EndTime      time.Time `json:"endTime,omitempty"`
 	Duration     int64     `json:"duration,omitempty"` // Duration in milliseconds
+	StartSlot    uint64    `json:"startSlot,omitempty"`
+	SlotDelta    uint64    `json:"slotDelta,omitempty"`
 	Success      bool      `json:"success"`
 	Error        string    `json:"error,omitempty"`
 }

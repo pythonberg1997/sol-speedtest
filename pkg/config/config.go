@@ -2,7 +2,8 @@ package config
 
 // Config represents the application configuration
 type Config struct {
-	RPCURL       string            `yaml:"rpcUrl"`
+	RpcUrl       string            `yaml:"rpcUrl"`
+	WssUrl       string            `yaml:"wssUrl"`
 	NonceAccount string            `yaml:"nonceAccount"`
 	TestCount    int               `yaml:"testCount"`
 	Timeout      int               `yaml:"timeout"` // Timeout in seconds
