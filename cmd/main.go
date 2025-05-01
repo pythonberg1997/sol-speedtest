@@ -13,7 +13,7 @@ import (
 
 func main() {
 	configPath := flag.String("config", "config.yaml", "Path to the configuration file")
-	testInterval := flag.Int("interval", 30000, "Interval between test rounds in milliseconds")
+	testInterval := flag.Int("interval", 5000, "Interval between test rounds in milliseconds")
 	logLevel := flag.String("loglevel", "", "Log level: debug, info, warn, error")
 	flag.Parse()
 

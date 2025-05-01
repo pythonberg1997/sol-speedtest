@@ -116,8 +116,10 @@ func (c *Collector) ProcessResults() (*models.TestReport, error) {
 
 		var totalSuccessCount int
 		var totalDurationSum, minDuration, maxDuration int64
+		var totalSlotDeltaSum, minSlotDelta, maxSlotDelta uint64
 
 		minDuration = math.MaxInt64
+		minSlotDelta = math.MaxUint64
 
 		for endpointKey, tests := range endpointTests {
 			urlAndTip := splitEndpointKey(endpointKey)
@@ -130,14 +132,18 @@ func (c *Collector) ProcessResults() (*models.TestReport, error) {
 
 			urlMinDuration := int64(math.MaxInt64)
 			urlMaxDuration := int64(0)
+			urlMinSlotDelta := uint64(math.MaxUint64)
+			urlMaxSlotDelta := uint64(0)
 			var urlSuccessCount int
 			var urlDurationSum int64
+			var urlSlotDeltaSum uint64
 
 			for _, test := range tests {
 				if test.Success {
 					urlSuccessCount++
 					duration := test.Duration
 					urlDurationSum += duration
+					urlSlotDeltaSum += test.SlotDelta
 
 					if duration < urlMinDuration {
 						urlMinDuration = duration
@@ -146,11 +152,20 @@ func (c *Collector) ProcessResults() (*models.TestReport, error) {
 					if duration > urlMaxDuration {
 						urlMaxDuration = duration
 					}
+
+					if test.SlotDelta < urlMinSlotDelta {
+						urlMinSlotDelta = test.SlotDelta
+					}
+
+					if test.SlotDelta > urlMaxSlotDelta {
+						urlMaxSlotDelta = test.SlotDelta
+					}
 				}
 			}
 
 			totalSuccessCount += urlSuccessCount
 			totalDurationSum += urlDurationSum
+			totalSlotDeltaSum += urlSlotDeltaSum
 
 			urlResult.WinCount = urlSuccessCount
 
@@ -159,12 +174,24 @@ func (c *Collector) ProcessResults() (*models.TestReport, error) {
 				urlResult.MinDuration = urlMinDuration
 				urlResult.MaxDuration = urlMaxDuration
 
+				urlResult.AverageSlotDelta = urlSlotDeltaSum / uint64(urlSuccessCount)
+				urlResult.MinSlotDelta = urlMinSlotDelta
+				urlResult.MaxSlotDelta = urlMaxSlotDelta
+
 				if urlMinDuration < minDuration {
 					minDuration = urlMinDuration
 				}
 
 				if urlMaxDuration > maxDuration {
 					maxDuration = urlMaxDuration
+				}
+
+				if urlMinSlotDelta < minSlotDelta {
+					minSlotDelta = urlMinSlotDelta
+				}
+
+				if urlMaxSlotDelta > maxSlotDelta {
+					maxSlotDelta = urlMaxSlotDelta
 				}
 			}
 
@@ -175,6 +202,10 @@ func (c *Collector) ProcessResults() (*models.TestReport, error) {
 			providerResult.AverageDuration = totalDurationSum / int64(totalSuccessCount)
 			providerResult.MinDuration = minDuration
 			providerResult.MaxDuration = maxDuration
+
+			providerResult.AverageSlotDelta = totalSlotDeltaSum / uint64(totalSuccessCount)
+			providerResult.MinSlotDelta = minSlotDelta
+			providerResult.MaxSlotDelta = maxSlotDelta
 		}
 
 		report.ProviderResults = append(report.ProviderResults, providerResult)
