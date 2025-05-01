@@ -94,3 +94,10 @@ providers:
       - name: "tk"
         url: "https://tokyo.mainnet.block-engine.jito.wtf"
         tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"
+
+  - name: "binance"
+    tipAmount: 0
+    endpoints:
+      - name: "mainnet"
+        url: "https://solana-swqos-fullnode-qa.internal.nodereal.io"
+        tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"

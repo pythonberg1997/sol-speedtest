@@ -120,6 +120,8 @@ func (r *TestRunner) RunTests() error {
 					continue
 				}
 				cli = client.NewSlot0Client(endpoint.URL, apiKey)
+			case "binance":
+				cli = client.NewBinanceClient(endpoint.URL)
 			case "blockRazor":
 				apiKey := os.Getenv("BLOCK_RAZOR")
 				if apiKey == "" {
@@ -392,20 +394,25 @@ func (r *TestRunner) collectResults(resultsChan <-chan *models.TransactionTest, 
 func (r *TestRunner) buildTransaction(
 	tipAmount uint64, tipAccount string, nonce solana.Hash,
 ) (string, string, error) {
+	var ixs []solana.Instruction
 	advanceNonceIx := system.NewAdvanceNonceAccountInstruction(
 		r.nonceAccount,
 		solana.SysVarRecentBlockHashesPubkey,
 		r.signer.PublicKey(),
 	).Build()
+	ixs = append(ixs, advanceNonceIx)
 
-	tipIx := system.NewTransferInstruction(
-		tipAmount,
-		r.signer.PublicKey(),
-		solana.MustPublicKeyFromBase58(tipAccount),
-	).Build()
+	if tipAmount > 0 {
+		tipIx := system.NewTransferInstruction(
+			tipAmount,
+			r.signer.PublicKey(),
+			solana.MustPublicKeyFromBase58(tipAccount),
+		).Build()
+		ixs = append(ixs, tipIx)
+	}
 
 	tx, err := solana.NewTransaction(
-		[]solana.Instruction{advanceNonceIx, tipIx},
+		ixs,
 		nonce,
 		solana.TransactionPayer(r.signer.PublicKey()),
 	)
