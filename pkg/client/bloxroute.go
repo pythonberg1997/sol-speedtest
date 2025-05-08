@@ -37,13 +37,19 @@ type bloxrouteResponse struct {
 	Signature string `json:"signature"`
 }
 
-func (c *BloxrouteClient) SendTransaction(ctx context.Context, txBase64 string) (string, error) {
+func (c *BloxrouteClient) SendTransaction(ctx context.Context, txBase64 string, antiMev bool) (string, error) {
 	reqData := bloxrouteRequest{}
 	reqData.Transaction.Content = txBase64
 	reqData.SkipPreFlight = true
 	reqData.FrontRunningProtection = false
 	reqData.FastBestEffort = false
 	reqData.UseStakedRPCs = true
+
+	if antiMev {
+		reqData.FrontRunningProtection = true
+		reqData.FastBestEffort = true
+		reqData.UseStakedRPCs = false
+	}
 
 	// what is this?
 	reqData.AllowBackRun = true
@@ -54,7 +60,7 @@ func (c *BloxrouteClient) SendTransaction(ctx context.Context, txBase64 string) 
 		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.Url+"/api/v2/submit", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "POST", c.Url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", err
 	}

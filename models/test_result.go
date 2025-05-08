@@ -34,7 +34,7 @@ type ProviderResult struct {
 	AverageDuration  int64           `json:"averageDuration"` // Milliseconds
 	MinDuration      int64           `json:"minDuration"`     // Milliseconds
 	MaxDuration      int64           `json:"maxDuration"`     // Milliseconds
-	AverageSlotDelta uint64          `json:"averageSlotDelta"`
+	AverageSlotDelta float64         `json:"averageSlotDelta"`
 	MinSlotDelta     uint64          `json:"minSlotDelta"`
 	MaxSlotDelta     uint64          `json:"maxSlotDelta"`
 	WinCount         int             `json:"winCount"`
@@ -49,7 +49,7 @@ type URLTestResult struct {
 	AverageDuration  int64             `json:"averageDuration"` // Milliseconds
 	MinDuration      int64             `json:"minDuration"`     // Milliseconds
 	MaxDuration      int64             `json:"maxDuration"`     // Milliseconds
-	AverageSlotDelta uint64            `json:"averageSlotDelta"`
+	AverageSlotDelta float64           `json:"averageSlotDelta"`
 	MinSlotDelta     uint64            `json:"minSlotDelta"`
 	MaxSlotDelta     uint64            `json:"maxSlotDelta"`
 	WinCount         int               `json:"winCount"`

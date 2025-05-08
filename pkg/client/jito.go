@@ -12,16 +12,18 @@ import (
 )
 
 type JitoClient struct {
-	Url string
+	Url  string
+	Uuid string
 }
 
-func NewJitoClient(url string) *JitoClient {
+func NewJitoClient(url string, uuid string) *JitoClient {
 	return &JitoClient{
-		Url: url,
+		Url:  url,
+		Uuid: uuid,
 	}
 }
 
-func (c *JitoClient) SendTransaction(ctx context.Context, txBase64 string) (string, error) {
+func (c *JitoClient) SendTransaction(ctx context.Context, txBase64 string, _ bool) (string, error) {
 	type requestParams struct {
 		Jsonrpc string        `json:"jsonrpc"`
 		Id      string        `json:"id"`
@@ -52,10 +54,16 @@ func (c *JitoClient) SendTransaction(ctx context.Context, txBase64 string) (stri
 		return "", err
 	}
 
+	var url string
+	if c.Uuid != "" {
+		url = c.Url + ":443/api/v1/bundles" + "?uuid=" + c.Uuid
+	} else {
+		url = c.Url + ":443/api/v1/bundles"
+	}
 	httpReq, err := http.NewRequestWithContext(
 		ctx,
 		"POST",
-		c.Url+":443/api/v1/bundles",
+		url,
 		bytes.NewReader(reqBody),
 	)
 	if err != nil {

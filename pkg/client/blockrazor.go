@@ -22,7 +22,7 @@ func NewBlockrazorClient(url string, authKey string) *BlockrazorClient {
 	}
 }
 
-func (c *BlockrazorClient) SendTransaction(ctx context.Context, txBase64 string) (string, error) {
+func (c *BlockrazorClient) SendTransaction(ctx context.Context, txBase64 string, _ bool) (string, error) {
 	conn, err := grpc.NewClient(c.Url,
 		// grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{})), // 對接通用端點時開啟tls配置
 		grpc.WithTransportCredentials(insecure.NewCredentials()), // 對接區域端點時使用
@@ -36,8 +36,9 @@ func (c *BlockrazorClient) SendTransaction(ctx context.Context, txBase64 string)
 	client.GetHealth(context.Background(), &pb.HealthRequest{})
 
 	sendRes, err := client.SendTransaction(context.TODO(), &pb.SendRequest{
-		Transaction: txBase64,
-		Mode:        "fast",
+		Transaction:   txBase64,
+		Mode:          "fast",
+		SkipPreflight: true,
 	})
 	if err != nil {
 		return "", fmt.Errorf("send tx error: %v", err)

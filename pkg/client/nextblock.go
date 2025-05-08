@@ -33,10 +33,14 @@ type nextblockResponse struct {
 	Uuid      string `json:"uuid"`
 }
 
-func (c *NextblockClient) SendTransaction(ctx context.Context, txBase64 string) (string, error) {
+func (c *NextblockClient) SendTransaction(ctx context.Context, txBase64 string, antiMev bool) (string, error) {
 	reqData := nextblockRequest{}
 	reqData.Transaction.Content = txBase64
 	reqData.FrontRunningProtection = false
+
+	if antiMev {
+		reqData.FrontRunningProtection = true
+	}
 
 	jsonData, err := json.Marshal(reqData)
 	if err != nil {

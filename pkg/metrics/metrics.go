@@ -86,6 +86,8 @@ func (c *Collector) ProcessResults() (*models.TestReport, error) {
 	report.TotalRounds = totalRounds
 
 	providerMap := make(map[string]map[string][]models.TransactionTest)
+	txHashSet := make(map[string]struct{})
+
 	for _, test := range c.tests {
 		endpointKey := test.URL + "|" + test.TipAccount
 
@@ -96,8 +98,12 @@ func (c *Collector) ProcessResults() (*models.TestReport, error) {
 		providerMap[test.ProviderName][endpointKey] = append(providerMap[test.ProviderName][endpointKey], test)
 
 		if test.Success && test.TxHash != "" {
-			report.SuccessfulTxHashes = append(report.SuccessfulTxHashes, test.TxHash)
+			txHashSet[test.TxHash] = struct{}{}
 		}
+	}
+
+	for txHash := range txHashSet {
+		report.SuccessfulTxHashes = append(report.SuccessfulTxHashes, txHash)
 	}
 
 	for providerName, endpointTests := range providerMap {
@@ -174,7 +180,7 @@ func (c *Collector) ProcessResults() (*models.TestReport, error) {
 				urlResult.MinDuration = urlMinDuration
 				urlResult.MaxDuration = urlMaxDuration
 
-				urlResult.AverageSlotDelta = urlSlotDeltaSum / uint64(urlSuccessCount)
+				urlResult.AverageSlotDelta = float64(urlSlotDeltaSum) / float64(urlSuccessCount)
 				urlResult.MinSlotDelta = urlMinSlotDelta
 				urlResult.MaxSlotDelta = urlMaxSlotDelta
 
@@ -203,7 +209,7 @@ func (c *Collector) ProcessResults() (*models.TestReport, error) {
 			providerResult.MinDuration = minDuration
 			providerResult.MaxDuration = maxDuration
 
-			providerResult.AverageSlotDelta = totalSlotDeltaSum / uint64(totalSuccessCount)
+			providerResult.AverageSlotDelta = float64(totalSlotDeltaSum) / float64(totalSuccessCount)
 			providerResult.MinSlotDelta = minSlotDelta
 			providerResult.MaxSlotDelta = maxSlotDelta
 		}

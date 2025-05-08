@@ -160,7 +160,12 @@ func (r *TestRunner) RunTests() error {
 				}
 				cli = client.NewBloxrouteClient(endpoint.URL, apiKey)
 			case "jito":
-				cli = client.NewJitoClient(endpoint.URL)
+				apiKey := os.Getenv("JITO")
+				if apiKey == "" {
+					providerLogger.Error("jito API key not set in environment variables")
+					continue
+				}
+				cli = client.NewJitoClient(endpoint.URL, apiKey)
 			case "nextBlock":
 				apiKey := os.Getenv("NEXT_BLOCK")
 				if apiKey == "" {
@@ -188,7 +193,7 @@ func (r *TestRunner) RunTests() error {
 			endpointChannels[endpointKey] = requestChan
 
 			wg.Add(1)
-			go r.endpointWorker(cli, endpointInfo, requestChan, &wg)
+			go r.endpointWorker(cli, endpointInfo, cfg.AntiMev, requestChan, &wg)
 		}
 	}
 
@@ -272,6 +277,7 @@ func (r *TestRunner) getNonce() solana.Hash {
 func (r *TestRunner) endpointWorker(
 	cli client.Client,
 	endpoint EndpointInfo,
+	antiMev bool,
 	requestChan <-chan NonceRequest,
 	wg *sync.WaitGroup,
 ) {
@@ -326,7 +332,7 @@ func (r *TestRunner) endpointWorker(
 		startSlot := r.GetCurrentSlot()
 		test.StartSlot = startSlot
 
-		_, err = cli.SendTransaction(ctx, txBase64)
+		_, err = cli.SendTransaction(ctx, txBase64, antiMev)
 		if errors.Is(ctx.Err(), context.Canceled) {
 			endpointLogger.Debug("Send tx canceled: %s", test.Error)
 			test.Error = "context canceled"
@@ -343,7 +349,7 @@ func (r *TestRunner) endpointWorker(
 		}
 		endpointLogger.Debug("Transaction sent, hash: %s", txHash)
 
-		confirmed, err := checkTransactionWithTimeout(ctx, r.rpcClient, txHash, endpointLogger)
+		confirmed, confirmedSlot, err := checkTransactionWithTimeout(ctx, r.rpcClient, txHash, endpointLogger)
 		if errors.Is(ctx.Err(), context.Canceled) {
 			endpointLogger.Debug("Confirmation check canceled: %s", test.Error)
 			test.Error = "context canceled"
@@ -362,8 +368,7 @@ func (r *TestRunner) endpointWorker(
 			test.Success = confirmed
 			if confirmed {
 				endpointLogger.Info("Transaction confirmed in %d ms", test.Duration)
-				confirmSlot := r.GetCurrentSlot()
-				test.SlotDelta = confirmSlot - startSlot
+				test.SlotDelta = confirmedSlot - startSlot
 
 				r.signalSuccess(req, endpointLogger, req.Nonce.String())
 			} else {
@@ -468,11 +473,11 @@ func checkTransactionWithTimeout(
 	rpcClient *rpc.Client,
 	txHash string,
 	log *logger.Logger,
-) (bool, error) {
+) (bool, uint64, error) {
 	signature, err := solana.SignatureFromBase58(txHash)
 	if err != nil {
 		log.Error("Invalid transaction hash: %v", err)
-		return false, fmt.Errorf("invalid transaction hash: %w", err)
+		return false, 0, fmt.Errorf("invalid transaction hash: %w", err)
 	}
 
 	pollInterval := 100 * time.Millisecond
@@ -486,7 +491,7 @@ func checkTransactionWithTimeout(
 		select {
 		case <-ctx.Done():
 			log.Debug("Transaction status check canceled: %v", ctx.Err())
-			return false, ctx.Err()
+			return false, 0, ctx.Err()
 		case <-ticker.C:
 			attempts++
 			log.Debug("Checking transaction status (attempt %d): %s", attempts, txHash)
@@ -499,7 +504,7 @@ func checkTransactionWithTimeout(
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					log.Debug("Transaction status check canceled: %v", err)
-					return false, err
+					return false, 0, err
 				}
 				log.Error("Error querying transaction status: %v", err)
 				continue
@@ -514,22 +519,22 @@ func checkTransactionWithTimeout(
 			if txStatus.ConfirmationStatus != "" {
 				if txStatus.ConfirmationStatus == rpc.ConfirmationStatusProcessed {
 					log.Debug("Transaction processed: %s", txHash)
-					return true, nil
+					return true, txStatus.Slot, nil
 				} else if txStatus.ConfirmationStatus == rpc.ConfirmationStatusConfirmed {
 					log.Debug("Transaction confirmed: %s", txHash)
-					return true, nil
+					return true, txStatus.Slot, nil
 				} else if txStatus.ConfirmationStatus == rpc.ConfirmationStatusFinalized {
 					log.Debug("Transaction finalized: %s", txHash)
-					return true, nil
+					return true, txStatus.Slot, nil
 				} else {
 					log.Debug("Transaction status: %s", txStatus.ConfirmationStatus)
-					return false, fmt.Errorf("unknown transaction status: %s", txStatus.ConfirmationStatus)
+					return false, 0, fmt.Errorf("unknown transaction status: %s", txStatus.ConfirmationStatus)
 				}
 			}
 
 			if txStatus.Err != nil {
 				log.Error("Transaction failed: %v", txStatus.Err)
-				return false, fmt.Errorf("transaction failed: %v", txStatus.Err)
+				return false, 0, fmt.Errorf("transaction failed: %v", txStatus.Err)
 			}
 		}
 	}

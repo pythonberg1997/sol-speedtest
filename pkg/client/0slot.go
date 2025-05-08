@@ -24,7 +24,7 @@ func NewSlot0Client(url string, apiKey string) *Slot0Client {
 	}
 }
 
-func (c *Slot0Client) SendTransaction(ctx context.Context, txBase64 string) (string, error) {
+func (c *Slot0Client) SendTransaction(ctx context.Context, txBase64 string, antiMev bool) (string, error) {
 	type requestParams struct {
 		Jsonrpc string        `json:"jsonrpc"`
 		Id      string        `json:"id"`
@@ -56,6 +56,9 @@ func (c *Slot0Client) SendTransaction(ctx context.Context, txBase64 string) (str
 	}
 
 	url := fmt.Sprintf("%s?api-key=%s", c.Url, c.ApiKey)
+	if antiMev {
+		url += "&anti-mev=true"
+	}
 	httpReq, err := http.NewRequestWithContext(
 		ctx,
 		"POST",

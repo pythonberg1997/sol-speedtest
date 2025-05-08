@@ -21,7 +21,7 @@ func NewBinanceClient(url string) *BinanceClient {
 	}
 }
 
-func (c *BinanceClient) SendTransaction(ctx context.Context, txBase64 string) (string, error) {
+func (c *BinanceClient) SendTransaction(ctx context.Context, txBase64 string, _ bool) (string, error) {
 	type requestParams struct {
 		Jsonrpc string        `json:"jsonrpc"`
 		Id      string        `json:"id"`
@@ -43,7 +43,7 @@ func (c *BinanceClient) SendTransaction(ctx context.Context, txBase64 string) (s
 		Method:  "sendTransaction",
 		Params: []interface{}{
 			txBase64,
-			map[string]string{"encoding": "base64"},
+			map[string]interface{}{"encoding": "base64", "skipPreflight": true},
 		},
 	}
 
