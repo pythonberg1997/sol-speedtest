@@ -24,10 +24,11 @@ type LogRotationConfig struct {
 
 // ProviderConfig represents a service provider configuration
 type ProviderConfig struct {
-	Name      string           `yaml:"name"`
-	AntiMev   bool             `yaml:"antiMev"`
-	TipAmount uint64           `yaml:"tipAmount"`
-	Endpoints []EndpointConfig `yaml:"endpoints"`
+	Name        string           `yaml:"name"`
+	AntiMev     bool             `yaml:"antiMev"`
+	PriorityFee uint64           `yaml:"priorityFee"`
+	TipAmount   uint64           `yaml:"tipAmount"`
+	Endpoints   []EndpointConfig `yaml:"endpoints"`
 }
 
 // EndpointConfig represents an endpoint with its URL and tip account

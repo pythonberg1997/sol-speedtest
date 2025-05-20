@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/gagliardetto/solana-go"
+	computebudget "github.com/gagliardetto/solana-go/programs/compute-budget"
 	"github.com/gagliardetto/solana-go/programs/system"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/gagliardetto/solana-go/rpc/ws"
@@ -42,6 +44,7 @@ type TestRunner struct {
 type EndpointInfo struct {
 	ProviderName string
 	URL          string
+	PriorityFee  uint64
 	TipAmount    uint64
 	TipAccount   string
 }
@@ -180,6 +183,7 @@ func (r *TestRunner) RunTests() error {
 			endpointInfo := EndpointInfo{
 				ProviderName: name,
 				URL:          endpoint.URL,
+				PriorityFee:  cfg.PriorityFee,
 				TipAmount:    cfg.TipAmount,
 				TipAccount:   endpoint.TipAccount,
 			}
@@ -317,7 +321,7 @@ func (r *TestRunner) endpointWorker(
 		}
 
 		endpointLogger.Debug("Sending transaction with nonce %s", req.Nonce.String())
-		txBase64, txHash, err := r.buildTransaction(endpoint.TipAmount, endpoint.TipAccount, req.Nonce)
+		txBase64, txHash, err := r.buildTransaction(endpoint.PriorityFee, endpoint.TipAmount, endpoint.TipAccount, req.Nonce)
 		if err != nil {
 			endpointLogger.Debug("Build tx failed: %s", test.Error)
 			test.Error = "failed to build transaction"
@@ -426,7 +430,7 @@ func (r *TestRunner) collectResults(resultsChan <-chan *models.TransactionTest, 
 }
 
 func (r *TestRunner) buildTransaction(
-	tipAmount uint64, tipAccount string, nonce solana.Hash,
+	priorityFee uint64, tipAmount uint64, tipAccount string, nonce solana.Hash,
 ) (string, string, error) {
 	var ixs []solana.Instruction
 	advanceNonceIx := system.NewAdvanceNonceAccountInstruction(
@@ -435,6 +439,24 @@ func (r *TestRunner) buildTransaction(
 		r.signer.PublicKey(),
 	).Build()
 	ixs = append(ixs, advanceNonceIx)
+
+	cuLimit := uint32(450)
+	if tipAmount > 0 {
+		cuLimit = 600
+	}
+
+	setUnitLimit := computebudget.SetComputeUnitLimit{
+		Units: cuLimit,
+	}
+	unitLimitIx := setUnitLimit.Build()
+	ixs = append(ixs, unitLimitIx)
+
+	unitPrice := new(big.Int).Div(new(big.Int).Mul(big.NewInt(int64(priorityFee)), big.NewInt(1e6)), big.NewInt(int64(cuLimit))).Uint64()
+	setUnitPrice := computebudget.SetComputeUnitPrice{
+		MicroLamports: unitPrice,
+	}
+	unitPriceIx := setUnitPrice.Build()
+	ixs = append(ixs, unitPriceIx)
 
 	if tipAmount > 0 {
 		tipIx := system.NewTransferInstruction(
