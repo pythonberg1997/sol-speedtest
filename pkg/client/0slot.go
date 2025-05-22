@@ -13,14 +13,16 @@ import (
 )
 
 type Slot0Client struct {
-	Url    string
-	ApiKey string
+	baseUrl string
+	client  *http.Client
 }
 
 func NewSlot0Client(url string, apiKey string) *Slot0Client {
+	baseUrl := fmt.Sprintf("%s?api-key=%s", url, apiKey)
+
 	return &Slot0Client{
-		Url:    url,
-		ApiKey: apiKey,
+		baseUrl: baseUrl,
+		client:  &http.Client{},
 	}
 }
 
@@ -55,10 +57,11 @@ func (c *Slot0Client) SendTransaction(ctx context.Context, txBase64 string, anti
 		return "", err
 	}
 
-	url := fmt.Sprintf("%s?api-key=%s", c.Url, c.ApiKey)
+	url := c.baseUrl
 	if antiMev {
 		url += "&anti-mev=true"
 	}
+
 	httpReq, err := http.NewRequestWithContext(
 		ctx,
 		"POST",
@@ -71,8 +74,7 @@ func (c *Slot0Client) SendTransaction(ctx context.Context, txBase64 string, anti
 
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
-	resp, err := client.Do(httpReq)
+	resp, err := c.client.Do(httpReq)
 	if err != nil {
 		return "", err
 	}

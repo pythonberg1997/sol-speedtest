@@ -12,12 +12,14 @@ import (
 )
 
 type BinanceClient struct {
-	Url string
+	url    string
+	client *http.Client
 }
 
 func NewBinanceClient(url string) *BinanceClient {
 	return &BinanceClient{
-		Url: url,
+		url:    url,
+		client: &http.Client{},
 	}
 }
 
@@ -55,7 +57,7 @@ func (c *BinanceClient) SendTransaction(ctx context.Context, txBase64 string, _ 
 	httpReq, err := http.NewRequestWithContext(
 		ctx,
 		"POST",
-		c.Url,
+		c.url,
 		bytes.NewReader(reqBody),
 	)
 	if err != nil {
@@ -64,8 +66,7 @@ func (c *BinanceClient) SendTransaction(ctx context.Context, txBase64 string, _ 
 
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
-	resp, err := client.Do(httpReq)
+	resp, err := c.client.Do(httpReq)
 	if err != nil {
 		return "", err
 	}

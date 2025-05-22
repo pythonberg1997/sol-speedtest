@@ -12,6 +12,7 @@ import (
 	"github.com/gagliardetto/solana-go"
 	computebudget "github.com/gagliardetto/solana-go/programs/compute-budget"
 	"github.com/gagliardetto/solana-go/programs/system"
+	"github.com/gagliardetto/solana-go/programs/memo"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/gagliardetto/solana-go/rpc/ws"
 
@@ -154,7 +155,7 @@ func (r *TestRunner) RunTests() error {
 					providerLogger.Error("blockRazor API key not set in environment variables")
 					continue
 				}
-				cli = client.NewBlockrazorClient(endpoint.URL, apiKey)
+				cli, _ = client.NewBlockrazorClient(endpoint.URL, apiKey)
 			case "bloXroute":
 				apiKey := os.Getenv("BLOX_ROUTE")
 				if apiKey == "" {
@@ -162,6 +163,9 @@ func (r *TestRunner) RunTests() error {
 					continue
 				}
 				cli = client.NewBloxrouteClient(endpoint.URL, apiKey)
+			case "helius":
+				apiKey := os.Getenv("HELIUS") // apiKey could be empty
+				cli = client.NewHeliusClient(endpoint.URL, apiKey)
 			case "jito":
 				apiKey := os.Getenv("JITO")
 				if apiKey == "" {
@@ -176,6 +180,9 @@ func (r *TestRunner) RunTests() error {
 					continue
 				}
 				cli = client.NewNextblockClient(endpoint.URL, apiKey)
+			case "triton":
+				apiKey := os.Getenv("TRITON")
+				cli = client.NewTritonClient(endpoint.URL, apiKey)
 			default:
 				providerLogger.Error("Unsupported provider: %s", cfg.Name)
 			}
@@ -197,7 +204,7 @@ func (r *TestRunner) RunTests() error {
 			endpointChannels[endpointKey] = requestChan
 
 			wg.Add(1)
-			go r.endpointWorker(cli, endpointInfo, cfg.AntiMev, requestChan, &wg)
+			go r.endpointWorker(cli, cfg.Name, endpointInfo, cfg.AntiMev, requestChan, &wg)
 		}
 	}
 
@@ -280,6 +287,7 @@ func (r *TestRunner) getNonce() solana.Hash {
 
 func (r *TestRunner) endpointWorker(
 	cli client.Client,
+	name string,
 	endpoint EndpointInfo,
 	antiMev bool,
 	requestChan <-chan NonceRequest,
@@ -321,7 +329,7 @@ func (r *TestRunner) endpointWorker(
 		}
 
 		endpointLogger.Debug("Sending transaction with nonce %s", req.Nonce.String())
-		txBase64, txHash, err := r.buildTransaction(endpoint.PriorityFee, endpoint.TipAmount, endpoint.TipAccount, req.Nonce)
+		txBase64, txHash, err := r.buildTransaction(name, endpoint.PriorityFee, endpoint.TipAmount, endpoint.TipAccount, req.Nonce)
 		if err != nil {
 			endpointLogger.Debug("Build tx failed: %s", test.Error)
 			test.Error = "failed to build transaction"
@@ -430,7 +438,7 @@ func (r *TestRunner) collectResults(resultsChan <-chan *models.TransactionTest, 
 }
 
 func (r *TestRunner) buildTransaction(
-	priorityFee uint64, tipAmount uint64, tipAccount string, nonce solana.Hash,
+	name string, priorityFee uint64, tipAmount uint64, tipAccount string, nonce solana.Hash,
 ) (string, string, error) {
 	var ixs []solana.Instruction
 	advanceNonceIx := system.NewAdvanceNonceAccountInstruction(
@@ -440,23 +448,27 @@ func (r *TestRunner) buildTransaction(
 	).Build()
 	ixs = append(ixs, advanceNonceIx)
 
-	cuLimit := uint32(450)
-	if tipAmount > 0 {
-		cuLimit = 600
+	if name != "" {
+		memoIx := memo.NewMemoInstruction([]byte(name), r.signer.PublicKey()).Build()
+		ixs = append(ixs, memoIx)
 	}
 
+	// TODO: simulate cu limit
+	cuLimit := uint32(25000)
 	setUnitLimit := computebudget.SetComputeUnitLimit{
 		Units: cuLimit,
 	}
 	unitLimitIx := setUnitLimit.Build()
 	ixs = append(ixs, unitLimitIx)
 
-	unitPrice := new(big.Int).Div(new(big.Int).Mul(big.NewInt(int64(priorityFee)), big.NewInt(1e6)), big.NewInt(int64(cuLimit))).Uint64()
-	setUnitPrice := computebudget.SetComputeUnitPrice{
-		MicroLamports: unitPrice,
+	if priorityFee > 0 {
+		unitPrice := new(big.Int).Div(new(big.Int).Mul(big.NewInt(int64(priorityFee)), big.NewInt(1e6)), big.NewInt(int64(cuLimit))).Uint64()
+		setUnitPrice := computebudget.SetComputeUnitPrice{
+			MicroLamports: unitPrice,
+		}
+		unitPriceIx := setUnitPrice.Build()
+		ixs = append(ixs, unitPriceIx)
 	}
-	unitPriceIx := setUnitPrice.Build()
-	ixs = append(ixs, unitPriceIx)
 
 	if tipAmount > 0 {
 		tipIx := system.NewTransferInstruction(

@@ -1,4 +1,4 @@
-rpcUrl: "https://solana-fullnode-us.internal.nodereal.io:443"
+rpcUrl: "https://mainnet.helius-rpc.com/?api-key="
 wssUrl: "wss://mainnet.helius-rpc.com/?api-key="
 nonceAccount: "DvN7DSowbwqN1CdDYmMo5Hx6RRJr5ha9qLruFQfLyZ3t"
 testCount: 50
@@ -13,20 +13,42 @@ logRotation:
   rotateOnTime: true
 
 providers:
-#   - name: "blockRazor"
-#     antiMev: false
-#     tipAmount: 1017000
-#     endpoints:
-#       - name: "gm"
-#         url: "frankfurt.solana-grpc.blockrazor.xyz:80"
-#         tipAccount: "Gywj98ophM7GmkDdaWs4isqZnDdFCW7B46TXmKfvyqSm"
-#       - name: "hk"
-#         url: "hongkong.solana-grpc.blockrazor.xyz:80"
-#         tipAccount: "Gywj98ophM7GmkDdaWs4isqZnDdFCW7B46TXmKfvyqSm"
-#       - name: "ny"
-#         url: "newyork.solana-grpc.blockrazor.xyz:80"
-#         tipAccount: "Gywj98ophM7GmkDdaWs4isqZnDdFCW7B46TXmKfvyqSm"
-#
+  - name: "helius"
+    antiMev: false
+    priorityFee: 100000
+    tipAmount: 0
+    endpoints:
+      - name: "gm"
+        url: "https://staked.helius-rpc.com"
+        tipAccount: "Gywj98ophM7GmkDdaWs4isqZnDdFCW7B46TXmKfvyqSm"
+
+  - name: "triton"
+    antiMev: false
+    priorityFee: 100000
+    tipAmount: 0
+    endpoints:
+      - name: "gm"
+        url: "https://binance-solanam-f3e4.mainnet.rpcpool.com"
+        tipAccount: "Gywj98ophM7GmkDdaWs4isqZnDdFCW7B46TXmKfvyqSm"
+
+  - name: "blockRazor"
+    antiMev: false
+    priorityFee: 100000
+    tipAmount: 0
+    endpoints:
+#     - name: "gm"
+#       url: "frankfurt.solana-grpc.blockrazor.xyz:80"
+#       tipAccount: "Gywj98ophM7GmkDdaWs4isqZnDdFCW7B46TXmKfvyqSm"
+#     - name: "hk"
+#       url: "hongkong.solana-grpc.blockrazor.xyz:80"
+#       tipAccount: "Gywj98ophM7GmkDdaWs4isqZnDdFCW7B46TXmKfvyqSm"
+#     - name: "ny"
+#       url: "newyork.solana-grpc.blockrazor.xyz:80"
+#       tipAccount: "Gywj98ophM7GmkDdaWs4isqZnDdFCW7B46TXmKfvyqSm"
+     - name: "tk"
+       url: "tokyo.solana-grpc.blockrazor.xyz:80"
+       tipAccount: "Gywj98ophM7GmkDdaWs4isqZnDdFCW7B46TXmKfvyqSm"
+
 #   - name: "0xslot"
 #     antiMev: false
 #     tipAmount: 1000000
@@ -40,33 +62,34 @@ providers:
 #       - name: "ams"
 #         url: "http://ams1.0slot.trade"
 #         tipAccount: "Eb2KpSC8uMt9GmzyAEm5Eb1AAAgTjRaXWFjKyFXHZxF3"
-#
-#   - name: "bloXroute"
-#     antiMev: false
-#     tipAmount: 1000000
-#     endpoints:
-#       - name: "uk"
-#         url: "https://uk.solana.dex.blxrbdn.com/api/v2/submit"
-#         tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
-#       - name: "ny"
-#         url: "https://ny.solana.dex.blxrbdn.com/api/v2/submit"
-#         tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
-#       - name: "la"
-#         url: "https://la.solana.dex.blxrbdn.com/api/v2/submit"
-#         tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
-#       - name: "gm"
-#         url: "https://germany.solana.dex.blxrbdn.com/api/v2/submit"
-#         tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
-#       - name: "ams"
-#         url: "https://amsterdam.solana.dex.blxrbdn.com/api/v2/submit"
-#         tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
-#       - name: "tk"
-#         url: "https://tokyo.solana.dex.blxrbdn.com/api/v2/submit"
-#         tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
-#       - name: "ofr"
-#         url: "https://bxrgateway-solana-qa.internal.nodereal.io/submit"
-#         tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
-#
+
+  - name: "bloXroute"
+    antiMev: false
+    priorityFee: 100000
+    tipAmount: 0
+    endpoints:
+     - name: "uk"
+       url: "https://uk.solana.dex.blxrbdn.com/api/v2/submit"
+       tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
+     - name: "ny"
+       url: "https://ny.solana.dex.blxrbdn.com/api/v2/submit"
+       tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
+     - name: "la"
+       url: "https://la.solana.dex.blxrbdn.com/api/v2/submit"
+       tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
+     - name: "gm"
+       url: "https://germany.solana.dex.blxrbdn.com/api/v2/submit"
+       tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
+     - name: "ams"
+       url: "https://amsterdam.solana.dex.blxrbdn.com/api/v2/submit"
+       tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
+     - name: "tk"
+       url: "https://tokyo.solana.dex.blxrbdn.com/api/v2/submit"
+       tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
+     - name: "ofr"
+       url: "https://bxrgateway-solana-qa.internal.nodereal.io/submit"
+       tipAccount: "HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"
+
 #   - name: "nextBlock"
 #     antiMev: false
 #     tipAmount: 1002000
@@ -105,11 +128,11 @@ providers:
 #         url: "https://tokyo.mainnet.block-engine.jito.wtf"
 #         tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"
 
-   - name: "binance"
-     antiMev: false
-     priorityFee: 70000
-     tipAmount: 0
-     endpoints:
-       - name: "mainnet"
-         url: "https://solana-fullnode-us.internal.nodereal.io:443"
-         tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"
+#   - name: "binance"
+#     antiMev: false
+#     priorityFee: 70000
+#     tipAmount: 0
+#     endpoints:
+#       - name: "mainnet"
+#         url: "https://solana-fullnode-us.internal.nodereal.io:443"
+#         tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"

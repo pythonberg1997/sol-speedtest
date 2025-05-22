@@ -11,31 +11,39 @@ import (
 )
 
 type BlockrazorClient struct {
-	Url     string
-	AuthKey string
+	url     string
+	authKey string
+	conn    *grpc.ClientConn
+	client  pb.ServerClient
 }
 
-func NewBlockrazorClient(url string, authKey string) *BlockrazorClient {
-	return &BlockrazorClient{
-		Url:     url,
-		AuthKey: authKey,
-	}
-}
-
-func (c *BlockrazorClient) SendTransaction(ctx context.Context, txBase64 string, _ bool) (string, error) {
-	conn, err := grpc.NewClient(c.Url,
+func NewBlockrazorClient(url string, authKey string) (*BlockrazorClient, error) {
+	conn, err := grpc.NewClient(url,
 		// grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{})), // 對接通用端點時開啟tls配置
 		grpc.WithTransportCredentials(insecure.NewCredentials()), // 對接區域端點時使用
-		grpc.WithPerRPCCredentials(&Authentication{c.AuthKey}),
+		grpc.WithPerRPCCredentials(&Authentication{authKey}),
 	)
 	if err != nil {
-		return "", fmt.Errorf("connect error: %v", err)
+		return nil, fmt.Errorf("connect error: %v", err)
 	}
 
 	client := pb.NewServerClient(conn)
-	client.GetHealth(context.Background(), &pb.HealthRequest{})
+	_, err = client.GetHealth(context.Background(), &pb.HealthRequest{})
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("health check error: %v", err)
+	}
 
-	sendRes, err := client.SendTransaction(context.TODO(), &pb.SendRequest{
+	return &BlockrazorClient{
+		url:     url,
+		authKey: authKey,
+		conn:    conn,
+		client:  client,
+	}, nil
+}
+
+func (c *BlockrazorClient) SendTransaction(ctx context.Context, txBase64 string, _ bool) (string, error) {
+	sendRes, err := c.client.SendTransaction(ctx, &pb.SendRequest{
 		Transaction:   txBase64,
 		Mode:          "fast",
 		SkipPreflight: true,
@@ -45,6 +53,13 @@ func (c *BlockrazorClient) SendTransaction(ctx context.Context, txBase64 string,
 	}
 
 	return sendRes.Signature, nil
+}
+
+func (c *BlockrazorClient) Close() error {
+	if c.conn != nil {
+		return c.conn.Close()
+	}
+	return nil
 }
 
 type Authentication struct {

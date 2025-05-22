@@ -10,14 +10,16 @@ import (
 )
 
 type NextblockClient struct {
-	Url        string
-	AuthHeader string
+	baseUrl    string
+	authHeader string
+	client     *http.Client
 }
 
 func NewNextblockClient(url string, authHeader string) *NextblockClient {
 	return &NextblockClient{
-		Url:        url,
-		AuthHeader: authHeader,
+		baseUrl:    url + "/api/v2/submit",
+		authHeader: authHeader,
+		client:     &http.Client{},
 	}
 }
 
@@ -47,18 +49,17 @@ func (c *NextblockClient) SendTransaction(ctx context.Context, txBase64 string, 
 		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.Url+"/api/v2/submit", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseUrl, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	if c.AuthHeader != "" {
-		req.Header.Set("Authorization", c.AuthHeader)
+	if c.authHeader != "" {
+		req.Header.Set("Authorization", c.authHeader)
 	}
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return "", err
 	}

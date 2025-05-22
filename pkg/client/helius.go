@@ -11,24 +11,24 @@ import (
 	"time"
 )
 
-type JitoClient struct {
-	baseUrl string
-	client  *http.Client
+type HeliusClient struct {
+	url    string
+	client *http.Client
 }
 
-func NewJitoClient(url string, uuid string) *JitoClient {
-	baseUrl := url + ":443/api/v1/bundles"
-	if uuid != "" {
-		baseUrl += "?uuid=" + uuid
+func NewHeliusClient(baseUrl, apiKey string) *HeliusClient {
+	url := baseUrl
+	if apiKey != "" {
+		url = baseUrl + "?api-key=" + apiKey
 	}
 
-	return &JitoClient{
-		baseUrl: baseUrl,
-		client:  &http.Client{},
+	return &HeliusClient{
+		url:    url,
+		client: &http.Client{},
 	}
 }
 
-func (c *JitoClient) SendTransaction(ctx context.Context, txBase64 string, _ bool) (string, error) {
+func (c *HeliusClient) SendTransaction(ctx context.Context, txBase64 string, _ bool) (string, error) {
 	type requestParams struct {
 		Jsonrpc string        `json:"jsonrpc"`
 		Id      string        `json:"id"`
@@ -47,10 +47,10 @@ func (c *JitoClient) SendTransaction(ctx context.Context, txBase64 string, _ boo
 	req := requestParams{
 		Jsonrpc: "2.0",
 		Id:      requestID,
-		Method:  "sendBundle",
+		Method:  "sendTransaction",
 		Params: []interface{}{
-			[]string{txBase64},
-			map[string]string{"encoding": "base64"},
+			txBase64,
+			map[string]interface{}{"encoding": "base64", "skipPreflight": true},
 		},
 	}
 
@@ -62,7 +62,7 @@ func (c *JitoClient) SendTransaction(ctx context.Context, txBase64 string, _ boo
 	httpReq, err := http.NewRequestWithContext(
 		ctx,
 		"POST",
-		c.baseUrl,
+		c.url,
 		bytes.NewReader(reqBody),
 	)
 	if err != nil {

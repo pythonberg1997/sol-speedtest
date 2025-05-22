@@ -10,14 +10,16 @@ import (
 )
 
 type BloxrouteClient struct {
-	Url        string
-	AuthHeader string
+	url        string
+	authHeader string
+	client     *http.Client
 }
 
 func NewBloxrouteClient(url string, authHeader string) *BloxrouteClient {
 	return &BloxrouteClient{
-		Url:        url,
-		AuthHeader: authHeader,
+		url:        url,
+		authHeader: authHeader,
+		client:     &http.Client{},
 	}
 }
 
@@ -60,18 +62,17 @@ func (c *BloxrouteClient) SendTransaction(ctx context.Context, txBase64 string, 
 		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.Url, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "POST", c.url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	if c.AuthHeader != "" {
-		req.Header.Set("Authorization", c.AuthHeader)
+	if c.authHeader != "" {
+		req.Header.Set("Authorization", c.authHeader)
 	}
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return "", err
 	}
