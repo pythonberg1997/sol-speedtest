@@ -1,4 +1,4 @@
-rpcUrl: "https://solana-fullnode-us.internal.nodereal.io "
+rpcUrl: "https://solana-fullnode-us.internal.nodereal.io:443"
 wssUrl: "wss://mainnet.helius-rpc.com/?api-key="
 nonceAccount: "DvN7DSowbwqN1CdDYmMo5Hx6RRJr5ha9qLruFQfLyZ3t"
 testCount: 50
@@ -78,32 +78,32 @@ providers:
 #         url: "https://ny.nextblock.io"
 #         tipAccount: "NextbLoCkVtMGcV47JzewQdvBpLqT9TxQFozQkN98pE"
 
-   - name: "jito"
-     antiMev: false
-     priorityFee: 70000
-     tipAmount: 30000
-     endpoints:
-       - name: "mainnet"
-         url: "https://mainnet.block-engine.jito.wtf"
-         tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"
-       - name: "uk"
-         url: "https://london.mainnet.block-engine.jito.wtf"
-         tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"
-       - name: "ny"
-         url: "https://ny.mainnet.block-engine.jito.wtf"
-         tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"
-       - name: "slc"
-         url: "https://slc.mainnet.block-engine.jito.wtf"
-         tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"
-       - name: "gm"
-         url: "https://frankfurt.mainnet.block-engine.jito.wtf"
-         tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"
-       - name: "ams"
-         url: "https://amsterdam.mainnet.block-engine.jito.wtf"
-         tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"
-       - name: "tk"
-         url: "https://tokyo.mainnet.block-engine.jito.wtf"
-         tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"
+#   - name: "jito"
+#     antiMev: false
+#     priorityFee: 70000
+#     tipAmount: 30000
+#     endpoints:
+#       - name: "mainnet"
+#         url: "https://mainnet.block-engine.jito.wtf"
+#         tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"
+#       - name: "uk"
+#         url: "https://london.mainnet.block-engine.jito.wtf"
+#         tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"
+#       - name: "ny"
+#         url: "https://ny.mainnet.block-engine.jito.wtf"
+#         tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"
+#       - name: "slc"
+#         url: "https://slc.mainnet.block-engine.jito.wtf"
+#         tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"
+#       - name: "gm"
+#         url: "https://frankfurt.mainnet.block-engine.jito.wtf"
+#         tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"
+#       - name: "ams"
+#         url: "https://amsterdam.mainnet.block-engine.jito.wtf"
+#         tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"
+#       - name: "tk"
+#         url: "https://tokyo.mainnet.block-engine.jito.wtf"
+#         tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"
 
    - name: "binance"
      antiMev: false
@@ -111,5 +111,5 @@ providers:
      tipAmount: 0
      endpoints:
        - name: "mainnet"
-         url: "https://solana-fullnode-us.internal.nodereal.io "
+         url: "https://solana-fullnode-us.internal.nodereal.io:443"
          tipAccount: "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"
