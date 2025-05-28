@@ -4,17 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gagliardetto/solana-go"
 	computebudget "github.com/gagliardetto/solana-go/programs/compute-budget"
-	"github.com/gagliardetto/solana-go/programs/system"
 	"github.com/gagliardetto/solana-go/programs/memo"
+	"github.com/gagliardetto/solana-go/programs/system"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/gagliardetto/solana-go/rpc/ws"
+	"github.com/joho/godotenv"
 
 	"sol-speedtest/models"
 	"sol-speedtest/pkg/client"
@@ -23,7 +24,13 @@ import (
 	"sol-speedtest/pkg/metrics"
 )
 
-var blockInterval = 400 * time.Millisecond
+const (
+	blockInterval   = 400 * time.Millisecond
+	rpcPollInterval = 100 * time.Millisecond
+
+	defaultComputeUnitLimit = uint32(25000)
+	microLamportsPerLamport = 1e6
+)
 
 type TestRunner struct {
 	config         *config.Config
@@ -34,10 +41,8 @@ type TestRunner struct {
 	providerConfig map[string]config.ProviderConfig
 	testInterval   time.Duration
 
-	preNonce *solana.Hash
-
-	currentSlot uint64
-	slotMu      sync.RWMutex
+	preNonce    *solana.Hash
+	currentSlot atomic.Uint64
 
 	logger *logger.Logger
 }
@@ -55,8 +60,7 @@ type NonceRequest struct {
 	TestIndex     int
 	ResultChan    chan<- *models.TransactionTest
 	SuccessChan   chan bool
-	SuccessMu     *sync.Mutex
-	SuccessSignal *bool
+	SuccessSignal *atomic.Bool
 }
 
 func NewTestRunner(cfg *config.Config, privKey string, logLevel logger.LogLevel) *TestRunner {
@@ -100,7 +104,7 @@ func NewTestRunner(cfg *config.Config, privKey string, logLevel logger.LogLevel)
 		nonceAccount:   nonceAccount,
 		collector:      metrics.NewCollector(cfg.OutputPath),
 		providerConfig: providerConfig,
-		testInterval:   blockInterval,
+		testInterval:   blockInterval * 5,
 		logger:         log,
 	}
 
@@ -108,7 +112,7 @@ func NewTestRunner(cfg *config.Config, privKey string, logLevel logger.LogLevel)
 		go runner.startSlotSubscription(cfg.WssUrl)
 
 		for {
-			slot := runner.GetCurrentSlot()
+			slot := runner.currentSlot.Load()
 			if slot > 0 {
 				runner.logger.Info("Current slot height: %d", slot)
 				break
@@ -126,6 +130,56 @@ func (r *TestRunner) SetTestInterval(interval time.Duration) {
 	r.testInterval = interval
 }
 
+func (r *TestRunner) createClient(providerName, endpointURL string) (client.Client, error) {
+	if err := godotenv.Load(".env"); err != nil {
+		r.logger.Warn("load .env failed: %w", err)
+	}
+
+	switch providerName {
+	case "0xslot":
+		apiKey := os.Getenv("SLOT0")
+		if apiKey == "" {
+			return nil, fmt.Errorf("0xslot API key not set in environment variables")
+		}
+		return client.NewSlot0Client(endpointURL, apiKey), nil
+	case "binance":
+		return client.NewBinanceClient(endpointURL), nil
+	case "blockRazor":
+		apiKey := os.Getenv("BLOCK_RAZOR")
+		if apiKey == "" {
+			return nil, fmt.Errorf("blockRazor API key not set in environment variables")
+		}
+		cli, _ := client.NewBlockrazorClient(endpointURL, apiKey)
+		return cli, nil
+	case "bloXroute":
+		apiKey := os.Getenv("BLOX_ROUTE")
+		if apiKey == "" {
+			return nil, fmt.Errorf("bloXroute API key not set in environment variables")
+		}
+		return client.NewBloxrouteClient(endpointURL, apiKey), nil
+	case "helius":
+		apiKey := os.Getenv("HELIUS") // apiKey could be empty
+		return client.NewHeliusClient(endpointURL, apiKey), nil
+	case "jito":
+		apiKey := os.Getenv("JITO")
+		if apiKey == "" {
+			return nil, fmt.Errorf("jito API key not set in environment variables")
+		}
+		return client.NewJitoClient(endpointURL, apiKey), nil
+	case "nextBlock":
+		apiKey := os.Getenv("NEXT_BLOCK")
+		if apiKey == "" {
+			return nil, fmt.Errorf("nextBlock API key not set in environment variables")
+		}
+		return client.NewNextblockClient(endpointURL, apiKey), nil
+	case "triton":
+		apiKey := os.Getenv("TRITON")
+		return client.NewTritonClient(endpointURL, apiKey), nil
+	default:
+		return nil, fmt.Errorf("unsupported provider: %s", providerName)
+	}
+}
+
 func (r *TestRunner) RunTests() error {
 	var endpoints []EndpointInfo
 	endpointChannels := make(map[string]chan NonceRequest)
@@ -138,53 +192,10 @@ func (r *TestRunner) RunTests() error {
 		providerLogger.Info("Setting up provider with %d endpoints", len(cfg.Endpoints))
 
 		for _, endpoint := range cfg.Endpoints {
-			var cli client.Client
-			switch cfg.Name {
-			case "0xslot":
-				apiKey := os.Getenv("SLOT0")
-				if apiKey == "" {
-					providerLogger.Error("0xslot API key not set in environment variables")
-					continue
-				}
-				cli = client.NewSlot0Client(endpoint.URL, apiKey)
-			case "binance":
-				cli = client.NewBinanceClient(endpoint.URL)
-			case "blockRazor":
-				apiKey := os.Getenv("BLOCK_RAZOR")
-				if apiKey == "" {
-					providerLogger.Error("blockRazor API key not set in environment variables")
-					continue
-				}
-				cli, _ = client.NewBlockrazorClient(endpoint.URL, apiKey)
-			case "bloXroute":
-				apiKey := os.Getenv("BLOX_ROUTE")
-				if apiKey == "" {
-					providerLogger.Error("bloXroute API key not set in environment variables")
-					continue
-				}
-				cli = client.NewBloxrouteClient(endpoint.URL, apiKey)
-			case "helius":
-				apiKey := os.Getenv("HELIUS") // apiKey could be empty
-				cli = client.NewHeliusClient(endpoint.URL, apiKey)
-			case "jito":
-				apiKey := os.Getenv("JITO")
-				if apiKey == "" {
-					providerLogger.Error("jito API key not set in environment variables")
-					continue
-				}
-				cli = client.NewJitoClient(endpoint.URL, apiKey)
-			case "nextBlock":
-				apiKey := os.Getenv("NEXT_BLOCK")
-				if apiKey == "" {
-					providerLogger.Error("nextBlock API key not set in environment variables")
-					continue
-				}
-				cli = client.NewNextblockClient(endpoint.URL, apiKey)
-			case "triton":
-				apiKey := os.Getenv("TRITON")
-				cli = client.NewTritonClient(endpoint.URL, apiKey)
-			default:
-				providerLogger.Error("Unsupported provider: %s", cfg.Name)
+			cli, err := r.createClient(name, endpoint.URL)
+			if err != nil {
+				providerLogger.Error("Failed to create client: %v", err)
+				continue
 			}
 
 			endpointInfo := EndpointInfo{
@@ -204,7 +215,7 @@ func (r *TestRunner) RunTests() error {
 			endpointChannels[endpointKey] = requestChan
 
 			wg.Add(1)
-			go r.endpointWorker(cli, cfg.Name, endpointInfo, cfg.AntiMev, requestChan, &wg)
+			go r.endpointWorker(cli, name, endpointInfo, cfg.AntiMev, requestChan, &wg)
 		}
 	}
 
@@ -217,32 +228,35 @@ func (r *TestRunner) RunTests() error {
 	r.logger.Info("Starting %d test rounds with %d ms interval across %d endpoints",
 		r.config.TestCount, int64(r.testInterval/time.Millisecond), len(endpoints))
 
-	for i := 0; i < r.config.TestCount; i++ {
+	for i := range r.config.TestCount {
+		r.logger.Debug("Round %d: start", i+1)
 		nonce := r.getNonce()
-		r.logger.Debug("Round %d: Got nonce %s", i, nonce.String())
+		r.logger.Debug("Round %d: Got nonce %s", i+1, nonce.String())
 
-		successSignal := false
-		var successMu sync.Mutex
+		successSignal := atomic.Bool{}
 		successChan := make(chan bool, len(endpoints))
 
 		for endpointKey, ch := range endpointChannels {
-			r.logger.Debug("Round %d: Sending nonce %s to endpoint %s", i, nonce.String(), endpointKey)
+			r.logger.Debug("Round %d: Sending nonce %s to endpoint %s", i+1, nonce.String(), endpointKey)
 			ch <- NonceRequest{
 				Nonce:         nonce,
 				TestIndex:     i,
 				ResultChan:    resultsChan,
 				SuccessChan:   successChan,
-				SuccessMu:     &successMu,
 				SuccessSignal: &successSignal,
 			}
 		}
 
-		time.Sleep(r.testInterval)
-		close(successChan)
-
-		if (i+1)%100 == 0 {
-			r.logger.Info("Completed %d/%d test rounds", i+1, r.config.TestCount)
+		select {
+		case <-successChan:
+			r.logger.Debug("Round %d: Received success signal, proceeding to next round", i+1)
+			close(successChan)
+			continue
+		case <-time.After(r.testInterval):
+			r.logger.Warn("Round %d: No success signal received within %d ms, proceeding to next round", i+1, r.testInterval.Milliseconds())
 		}
+
+		close(successChan)
 	}
 
 	r.logger.Info("All test rounds sent, waiting for endpoints to complete")
@@ -279,7 +293,7 @@ func (r *TestRunner) getNonce() solana.Hash {
 			break
 		}
 
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(rpcPollInterval)
 	}
 
 	return nonce
@@ -299,11 +313,7 @@ func (r *TestRunner) endpointWorker(
 	endpointLogger.Info("Starting endpoint worker for %s", endpoint.URL)
 
 	for req := range requestChan {
-		req.SuccessMu.Lock()
-		alreadySucceeded := *req.SuccessSignal
-		req.SuccessMu.Unlock()
-
-		if alreadySucceeded {
+		if req.SuccessSignal.Load() {
 			endpointLogger.Debug("Skipping nonce %s due to existing success", req.Nonce.String())
 			continue
 		}
@@ -331,42 +341,34 @@ func (r *TestRunner) endpointWorker(
 		endpointLogger.Debug("Sending transaction with nonce %s", req.Nonce.String())
 		txBase64, txHash, err := r.buildTransaction(name, endpoint.PriorityFee, endpoint.TipAmount, endpoint.TipAccount, req.Nonce)
 		if err != nil {
-			endpointLogger.Debug("Build tx failed: %s", test.Error)
-			test.Error = "failed to build transaction"
-			req.ResultChan <- &test
-			cancel()
+			endpointLogger.Debug("Build tx failed: %v", err)
+			r.handleWorkerError(&test, req, cancel, "failed to build transaction")
 			continue
 		}
 		test.TxHash = txHash
 
 		startTime := time.Now()
 		test.StartTime = startTime
-		startSlot := r.GetCurrentSlot()
+		startSlot := r.currentSlot.Load()
 		test.StartSlot = startSlot
 
 		_, err = cli.SendTransaction(ctx, txBase64, antiMev)
 		if errors.Is(ctx.Err(), context.Canceled) {
-			endpointLogger.Debug("Send tx canceled: %s", test.Error)
-			test.Error = "context canceled"
-			req.ResultChan <- &test
-			cancel()
+			endpointLogger.Debug("Send tx canceled")
+			r.handleWorkerError(&test, req, cancel, "context canceled")
 			continue
 		}
 		if err != nil {
 			endpointLogger.Error("Transaction failed: %v", err)
-			test.Error = err.Error()
-			req.ResultChan <- &test
-			cancel()
+			r.handleWorkerError(&test, req, cancel, err.Error())
 			continue
 		}
 		endpointLogger.Debug("Transaction sent, hash: %s", txHash)
 
 		confirmed, confirmedSlot, err := checkTransactionWithTimeout(ctx, r.rpcClient, txHash, endpointLogger)
 		if errors.Is(ctx.Err(), context.Canceled) {
-			endpointLogger.Debug("Confirmation check canceled: %s", test.Error)
-			test.Error = "context canceled"
-			req.ResultChan <- &test
-			cancel()
+			endpointLogger.Debug("Confirmation check canceled")
+			r.handleWorkerError(&test, req, cancel, "context canceled")
 			continue
 		}
 
@@ -395,13 +397,9 @@ func (r *TestRunner) endpointWorker(
 	endpointLogger.Info("Endpoint worker for %s completed", endpoint.URL)
 }
 
-// signalSuccess signals success to other workers to avoid redundant work
 func (r *TestRunner) signalSuccess(req NonceRequest, logger *logger.Logger, nonceStr string) {
-	req.SuccessMu.Lock()
-	defer req.SuccessMu.Unlock()
-
-	if !(*req.SuccessSignal) {
-		*req.SuccessSignal = true
+	if !req.SuccessSignal.Load() {
+		req.SuccessSignal.Store(true)
 		select {
 		case req.SuccessChan <- true:
 			logger.Info("Signaled success for nonce %s", nonceStr)
@@ -428,10 +426,6 @@ func (r *TestRunner) collectResults(resultsChan <-chan *models.TransactionTest, 
 		}
 
 		r.collector.AddTest(*test)
-
-		if count%100 == 0 {
-			r.logger.Info("Collected %d test results (%d successful)", count, successCount)
-		}
 	}
 
 	r.logger.Info("Result collection complete: %d total results, %d successful", count, successCount)
@@ -453,8 +447,8 @@ func (r *TestRunner) buildTransaction(
 		ixs = append(ixs, memoIx)
 	}
 
-	// TODO: simulate cu limit
-	cuLimit := uint32(25000)
+	// Set compute unit limit
+	cuLimit := defaultComputeUnitLimit
 	setUnitLimit := computebudget.SetComputeUnitLimit{
 		Units: cuLimit,
 	}
@@ -462,7 +456,7 @@ func (r *TestRunner) buildTransaction(
 	ixs = append(ixs, unitLimitIx)
 
 	if priorityFee > 0 {
-		unitPrice := new(big.Int).Div(new(big.Int).Mul(big.NewInt(int64(priorityFee)), big.NewInt(1e6)), big.NewInt(int64(cuLimit))).Uint64()
+		unitPrice := priorityFee * microLamportsPerLamport / uint64(cuLimit)
 		setUnitPrice := computebudget.SetComputeUnitPrice{
 			MicroLamports: unitPrice,
 		}
@@ -514,12 +508,18 @@ func checkTransactionWithTimeout(
 		return false, 0, fmt.Errorf("invalid transaction hash: %w", err)
 	}
 
-	pollInterval := 100 * time.Millisecond
-	ticker := time.NewTicker(pollInterval)
+	ticker := time.NewTicker(rpcPollInterval)
 	defer ticker.Stop()
 
 	log.Debug("Starting transaction status check for %s", txHash)
 	attempts := 0
+
+	// Map of valid confirmation statuses
+	validStatuses := map[rpc.ConfirmationStatusType]bool{
+		rpc.ConfirmationStatusProcessed: true,
+		rpc.ConfirmationStatusConfirmed: true,
+		rpc.ConfirmationStatusFinalized: true,
+	}
 
 	for {
 		select {
@@ -551,14 +551,8 @@ func checkTransactionWithTimeout(
 
 			txStatus := status.Value[0]
 			if txStatus.ConfirmationStatus != "" {
-				if txStatus.ConfirmationStatus == rpc.ConfirmationStatusProcessed {
-					log.Debug("Transaction processed: %s", txHash)
-					return true, txStatus.Slot, nil
-				} else if txStatus.ConfirmationStatus == rpc.ConfirmationStatusConfirmed {
+				if validStatuses[txStatus.ConfirmationStatus] {
 					log.Debug("Transaction confirmed: %s", txHash)
-					return true, txStatus.Slot, nil
-				} else if txStatus.ConfirmationStatus == rpc.ConfirmationStatusFinalized {
-					log.Debug("Transaction finalized: %s", txHash)
 					return true, txStatus.Slot, nil
 				} else {
 					log.Debug("Transaction status: %s", txStatus.ConfirmationStatus)
@@ -612,17 +606,13 @@ func (r *TestRunner) connectAndSubscribeSlot(ctx context.Context, wssUrl string)
 			return err
 		}
 
-		r.slotMu.Lock()
-		r.currentSlot = got.Slot
-		r.slotMu.Unlock()
-
+		r.currentSlot.Store(got.Slot)
 		r.logger.Debug("Updated current slot to %d", got.Slot)
 	}
 }
 
-// GetCurrentSlot returns the current slot height
-func (r *TestRunner) GetCurrentSlot() uint64 {
-	r.slotMu.RLock()
-	defer r.slotMu.RUnlock()
-	return r.currentSlot
+func (r *TestRunner) handleWorkerError(test *models.TransactionTest, req NonceRequest, cancel context.CancelFunc, errorMsg string) {
+	test.Error = errorMsg
+	req.ResultChan <- test
+	cancel()
 }

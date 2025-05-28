@@ -49,7 +49,6 @@ func DefaultRotationConfig() LogRotationConfig {
 // Logger is a structured logger with provider and endpoint context
 type Logger struct {
 	providerName   string
-	endpointName   string
 	endpointURL    string
 	level          LogLevel
 	logger         *log.Logger
@@ -216,68 +215,6 @@ func (l *Logger) checkRotation() {
 	}
 }
 
-// SetLogLevel sets the global log level
-func SetLogLevel(level LogLevel) {
-	logMu.Lock()
-	defer logMu.Unlock()
-	logLevel = level
-	if defaultLogger != nil {
-		defaultLogger.level = level
-		defaultLogger.Info("Log level changed to %s", levelNames[level])
-	}
-}
-
-// GetRotationConfig gets a copy of the current rotation configuration
-func GetRotationConfig() LogRotationConfig {
-	logMu.Lock()
-	defer logMu.Unlock()
-	if defaultLogger != nil {
-		return defaultLogger.rotationConfig
-	}
-	return DefaultRotationConfig()
-}
-
-// SetRotationConfig updates the rotation configuration
-func SetRotationConfig(config LogRotationConfig) {
-	logMu.Lock()
-	defer logMu.Unlock()
-	if defaultLogger != nil {
-		defaultLogger.rotationConfig = config
-		defaultLogger.Info("Log rotation configuration updated (maxSize=%d bytes, maxAge=%v, maxBackups=%d)",
-			config.MaxSize, config.MaxAge, config.MaxBackups)
-	}
-}
-
-// GetLogger returns a new logger with the specified provider and endpoint context
-func GetLogger(providerName, endpointName, endpointURL string) *Logger {
-	logMu.Lock()
-	defer logMu.Unlock()
-
-	if defaultLogger == nil {
-		// Create a default logger that logs to stderr if not initialized
-		return &Logger{
-			providerName: providerName,
-			endpointName: endpointName,
-			endpointURL:  endpointURL,
-			level:        logLevel,
-			logger:       log.New(os.Stderr, "", 0),
-		}
-	}
-
-	return &Logger{
-		providerName:   providerName,
-		endpointName:   endpointName,
-		endpointURL:    endpointURL,
-		level:          logLevel,
-		logger:         defaultLogger.logger,
-		rotationConfig: defaultLogger.rotationConfig,
-		logDir:         defaultLogger.logDir,
-		currentFile:    defaultLogger.currentFile,
-		currentSize:    defaultLogger.currentSize,
-		lastRotation:   defaultLogger.lastRotation,
-	}
-}
-
 // GetDefaultLogger returns the default global logger
 func GetDefaultLogger() *Logger {
 	logMu.Lock()
@@ -303,8 +240,8 @@ func (l *Logger) formatMessage(level LogLevel, format string, args ...interface{
 
 	var contextStr string
 	if l.providerName != "" {
-		if l.endpointName != "" {
-			contextStr = fmt.Sprintf("[%s][%s][%s]", l.providerName, l.endpointName, l.endpointURL)
+		if l.endpointURL != "" {
+			contextStr = fmt.Sprintf("[%s][%s]", l.providerName, l.endpointURL)
 		} else {
 			contextStr = fmt.Sprintf("[%s]", l.providerName)
 		}
@@ -378,7 +315,6 @@ func (l *Logger) Fatal(format string, args ...interface{}) {
 func (l *Logger) WithProvider(providerName string) *Logger {
 	return &Logger{
 		providerName:   providerName,
-		endpointName:   l.endpointName,
 		endpointURL:    l.endpointURL,
 		level:          l.level,
 		logger:         l.logger,
