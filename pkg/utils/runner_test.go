@@ -47,3 +47,6 @@ func TestWs(t *testing.T) {
 		}
 	}
 }
+
+func TestSendDurable(t *testing.T) {
+}
